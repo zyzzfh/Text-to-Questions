@@ -42,7 +42,7 @@
             text-align: center; 
         }
         
-        /* --- NEW: Export Button Style --- */
+        /* --- Export Button Style --- */
         #export-button {
             background-color: #ffc107; /* Yellow/Amber color */
             color: #343a40;
@@ -85,7 +85,7 @@
             margin-top: 10px;
         }
 
-        /* --- Question Styles --- (unchanged) */
+        /* --- Question Styles --- */
         .question-container {
             margin-bottom: 30px;
             padding: 20px;
@@ -124,7 +124,7 @@
             font-weight: bold;
         }
 
-        /* --- Buttons --- (unchanged) */
+        /* --- Buttons --- */
         .button-group {
             margin-top: 15px;
             display: flex;
@@ -168,7 +168,7 @@
             background-color: #c82333;
         }
         
-        /* --- Answer/Explanation Block --- (unchanged) */
+        /* --- Answer/Explanation Block --- */
         .answer-explanation {
             display: none; 
             margin-top: 15px;
@@ -249,29 +249,23 @@
             scoreDisplayEl.textContent = `Quiz Progress: ${answered} / ${totalQuestions} Questions Answered`;
         }
 
-        // ... (markAnswer and toggleAnswer functions remain the same) ...
-
         function markAnswer(questionId, status) {
             const questionElement = document.getElementById(questionId);
             const currentStatus = questionElement.getAttribute('data-status');
             
-            // Only update if the status is changing or if it's currently 'unanswered'
             if (currentStatus !== status) {
                 questionElement.setAttribute('data-status', status);
             }
             
-            // Ensure the answer is revealed when scoring
             const answerBlock = questionElement.querySelector('.answer-explanation');
             const revealButton = questionElement.querySelector('.reveal-button');
             if (answerBlock.style.display === "none" || answerBlock.style.display === "") {
                 toggleAnswer(questionId);
-                // After revealing, immediately update the button text back to 'Hide'
                 revealButton.textContent = "Hide Answer & Explanation"; 
             }
 
             updateScore();
             
-            // Scroll to the next question if possible
             const nextQuestion = questionElement.nextElementSibling;
             if (nextQuestion && nextQuestion.classList.contains('question-container')) {
                 nextQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -286,14 +280,12 @@
             const correctOptionEl = questionElement.querySelector(`#${id}-opt${correctAnswerLetter}`);
 
             if (answerBlock.style.display === "none" || answerBlock.style.display === "") {
-                // Show logic
                 answerBlock.style.display = "block";
                 revealButton.textContent = "Hide Answer & Explanation";
                 if (correctOptionEl) {
                     correctOptionEl.classList.add('highlight');
                 }
             } else {
-                // Hide logic
                 answerBlock.style.display = "none";
                 revealButton.textContent = "Show Answer & Explanation";
                 if (correctOptionEl) {
@@ -302,12 +294,13 @@
             }
         }
 
-        // --- NEW: Export Function ---
+        // --- UPDATED: Export Function ---
         function exportResults() {
             const correct = parseInt(correctCountEl.textContent);
             const wrong = parseInt(wrongCountEl.textContent);
             const answered = correct + wrong;
             const totalQuestionsLoaded = parseInt(totalCountEl.textContent);
+            const allQuestions = document.querySelectorAll('.question-container');
 
             if (answered === 0) {
                 alert("No questions have been answered yet to export results.");
@@ -328,13 +321,14 @@
                 second: '2-digit'
             });
 
-            // Create the content for the text file
-            const exportContent = `
+            // 1. Build the Header Content
+            let exportContent = `
 Quiz Results Export
 ---------------------------
 Date & Time: ${dateTimeString}
+Total Questions Loaded: ${totalQuestionsLoaded}
 
-Questions Answered: ${answered} (out of ${totalQuestionsLoaded} loaded questions)
+Questions Answered: ${answered} 
 Correct Answers: ${correct}
 Wrong Answers: ${wrong}
 
@@ -342,25 +336,57 @@ Performance Score: ${percentage}% Correct
 ---------------------------
 `;
 
+            // 2. Build the Wrong Answers Section
+            let wrongQuestionsContent = '';
+            let wrongCount = 0;
+            
+            allQuestions.forEach((q) => {
+                if (q.getAttribute('data-status') === 'wrong') {
+                    wrongCount++;
+                    const qText = q.querySelector('.question-text').textContent.trim();
+                    const optionsList = Array.from(q.querySelectorAll('.options li')).map(li => li.textContent.trim()).join('\n    ');
+                    const correctAnswer = q.getAttribute('data-correct-answer');
+                    // Extract explanation text, cleaning up line breaks for the text file
+                    let explanationText = q.querySelector('.explanation-text').innerHTML.replace(/<br>/g, '\n').replace(/\n\s*\n/g, '\n').trim();
+
+                    wrongQuestionsContent += `
+*** INCORRECTLY ANSWERED QUESTION #${wrongCount} ***
+Question: ${qText}
+Options:
+    ${optionsList}
+Correct Answer: ${correctAnswer}
+Explanation: ${explanationText}
+--------------------------------------------------
+`;
+                }
+            });
+
+            // 3. Combine header and wrong questions
+            if (wrongCount > 0) {
+                exportContent += `\n\n### DETAIL OF INCORRECT ANSWERS (${wrongCount} total) ###\n`;
+                exportContent += wrongQuestionsContent;
+            } else {
+                exportContent += "\n\n### DETAIL OF INCORRECT ANSWERS ###\nNo questions were marked as wrong. Great job!";
+            }
+
+
             // Create a Blob with the content and trigger download
             const blob = new Blob([exportContent], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             
-            // Create a temporary anchor element
             const a = document.createElement('a');
             a.href = url;
-            a.download = `quiz_results_${now.toISOString().slice(0, 10)}.txt`; // Filename with current date
+            a.download = `quiz_study_guide_${now.toISOString().slice(0, 10)}.txt`; // Changed filename for study guide
             
-            // Programmatically click the anchor to start the download
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             
-            URL.revokeObjectURL(url); // Clean up the object URL
-            alert(`Results exported successfully! Score: ${percentage}%`);
+            URL.revokeObjectURL(url); 
+            alert(`Results and study guide exported successfully! Score: ${percentage}%`);
         }
 
-        // --- File Processing Logic --- (unchanged)
+        // --- File Processing Logic (unchanged) ---
 
         function loadAndProcessFiles() {
             const files = fileInput.files;
@@ -407,14 +433,13 @@ Performance Score: ${percentage}% Correct
                     QUESTION_REGEX.lastIndex++;
                 }
 
-                // Clean up captured groups
                 const clean = (str) => str ? str.trim().replace(/References:[\s\S]*$/, '').trim() : '';
                 
                 const questionText = clean(match[1]);
 
                 if (questionText.length > 10) { 
                     const options = [clean(match[2]), clean(match[3]), clean(match[4]), clean(match[5])];
-                    if (match[6]) options.push(clean(match[6])); // Option E
+                    if (match[6]) options.push(clean(match[6])); 
 
                     const questionKey = questionText.toLowerCase().replace(/[\W_]+/g, ''); 
 
@@ -444,7 +469,6 @@ Performance Score: ${percentage}% Correct
                 
                 q.options.forEach((option, i) => {
                     if (option) {
-                        // Assign a unique ID to each option for highlighting
                         optionsHtml += `<li id="${q.id}-opt${optionLetters[i]}"><strong>${optionLetters[i]}.</strong> ${option}</li>`;
                     }
                 });
@@ -468,9 +492,8 @@ Performance Score: ${percentage}% Correct
             });
 
             quizContainer.innerHTML = html;
-            updateScore(); // Initialize score tracker
+            updateScore(); 
             
-            // Clear the file input after processing
             fileInput.value = ''; 
         }
         
